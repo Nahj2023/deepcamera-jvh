@@ -1,99 +1,59 @@
+/**
+ * Auth Handler — SQLite
+ */
+
 import bcrypt from 'bcrypt';
 import { generateToken } from '../middleware/auth.js';
 
-/**
- * POST /api/auth/login
- * Autentica usuario y retorna JWT
- */
-export const login = async (req, res, db) => {
+export const login = (req, res, db) => {
   const { username, password } = req.body;
-
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
 
-  try {
-    const result = await db.query(
-      'SELECT id, username, email, role, password_hash FROM dc_users WHERE username = $1',
-      [username]
-    );
+  const user = db.prepare(
+    'SELECT id, username, email, role, password_hash FROM dc_users WHERE username = ?'
+  ).get(username);
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
+  const valid = bcrypt.compareSync(password, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = generateToken(user);
-
-    return res.json({
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  const token = generateToken(user);
+  return res.json({
+    token,
+    user: { id: user.id, username: user.username, email: user.email, role: user.role }
+  });
 };
 
-/**
- * GET /api/auth/me
- * Retorna datos del usuario autenticado
- */
-export const getMe = async (req, res, db) => {
-  try {
-    const result = await db.query(
-      'SELECT id, username, email, role, created_at FROM dc_users WHERE id = $1',
-      [req.user.id]
-    );
+export const getMe = (req, res, db) => {
+  const user = db.prepare(
+    'SELECT id, username, email, role, created_at FROM dc_users WHERE id = ?'
+  ).get(req.user.id);
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    return res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Get me error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  return res.json(user);
 };
 
-/**
- * POST /api/auth/register (solo para superadmin)
- * Crea nuevo usuario
- */
-export const register = async (req, res, db) => {
+export const register = (req, res, db) => {
   const { username, email, password, role } = req.body;
-
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
-
   if (req.user.role !== 'superadmin') {
     return res.status(403).json({ error: 'Only superadmin can create users' });
   }
 
+  const hash = bcrypt.hashSync(password, 10);
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = db.prepare(
+      'INSERT INTO dc_users (username, email, password_hash, role) VALUES (?, ?, ?, ?)'
+    ).run(username, email || null, hash, role || 'admin');
 
-    const result = await db.query(
-      'INSERT INTO dc_users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-      [username, email || null, hashedPassword, role || 'admin']
-    );
-
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json({ id: result.lastInsertRowid, username, email, role: role || 'admin' });
   } catch (err) {
-    if (err.code === '23505') {
+    if (err.message.includes('UNIQUE')) {
       return res.status(400).json({ error: 'Username already exists' });
     }
     console.error('Register error:', err);
