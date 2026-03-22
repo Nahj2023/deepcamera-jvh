@@ -1,0 +1,61 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Build
+dist/
+build/
+.next/
+out/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Videos/Storage
+uploads/
+videos/
+data/
+
+# Secrets
+secrets.json
+.aws/
+credentials.json
