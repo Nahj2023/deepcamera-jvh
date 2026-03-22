@@ -1,0 +1,121 @@
+<div style="height: 100%;">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Cámaras</h1>
+      <p class="page-subtitle">Estado de todas las cámaras por cliente</p>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Cliente:</label>
+      <select id="filterCustomer">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <button class="secondary" onclick="location.reload()" style="margin-left: auto;">Actualizar</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table id="cameraTable">
+      <thead>
+        <tr>
+          <th>Cámara</th>
+          <th>Cliente</th>
+          <th>Ubicación</th>
+          <th>Tipo</th>
+          <th>Estado</th>
+          <th>FPS actual</th>
+          <th>Última vista</th>
+        </tr>
+      </thead>
+      <tbody id="cameraBody">
+        <tr><td colspan="7" style="text-align: center; padding: 40px;">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script type="module">
+  import { apiGet } from '/auth.js';
+
+  const filterCustomer = document.getElementById('filterCustomer');
+  const cameraBody = document.getElementById('cameraBody');
+
+  let allCameras = [];
+  let customers = [];
+
+  async function loadCustomers() {
+    try {
+      customers = await apiGet('/api/customers') || [];
+      filterCustomer.innerHTML = '<option value="">Todos</option>';
+      customers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        filterCustomer.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Error loading customers:', err);
+    }
+  }
+
+  async function loadCameras() {
+    try {
+      allCameras = await apiGet('/api/cameras') || [];
+      renderCameras();
+    } catch (err) {
+      cameraBody.innerHTML = `<tr><td colspan="7" style="color: #EE5D50;">${err.message}</td></tr>`;
+    }
+  }
+
+  function renderCameras() {
+    let filtered = allCameras;
+
+    if (filterCustomer.value) {
+      filtered = filtered.filter(c => c.customer_id == filterCustomer.value);
+    }
+
+    if (filtered.length === 0) {
+      cameraBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No hay cámaras</td></tr>`;
+      return;
+    }
+
+    cameraBody.innerHTML = filtered.map(cam => `
+      <tr>
+        <td><strong>${cam.name}</strong></td>
+        <td>${customers.find(c => c.id === cam.customer_id)?.name || 'Desconocido'}</td>
+        <td>${cam.location || '-'}</td>
+        <td>${cam.camera_type || '-'}</td>
+        <td>
+          <span class="status-badge status-${cam.status}">
+            ${cam.status === 'online' ? '🟢 En línea' : '🔴 Sin conexión'}
+          </span>
+        </td>
+        <td>${cam.fps_current ? cam.fps_current.toFixed(1) + ' fps' : '-'}</td>
+        <td>${cam.last_seen ? new Date(cam.last_seen).toLocaleString() : 'Nunca'}</td>
+      </tr>
+    `).join('');
+  }
+
+  filterCustomer.addEventListener('change', renderCameras);
+
+  // Cargar datos iniciales
+  await loadCustomers();
+  await loadCameras();
+
+  // Recargar cada 15 segundos
+  setInterval(loadCameras, 15000);
+
+  // Socket.io para actualizaciones en tiempo real
+  const script = document.createElement('script');
+  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+  document.head.appendChild(script);
+
+  script.onload = () => {
+    const socket = io();
+    socket.on('camera_status', () => {
+      loadCameras();
+    });
+  };
+</script>

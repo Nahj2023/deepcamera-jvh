@@ -1,0 +1,167 @@
+<div style="height: 100%;">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Test Lab</h1>
+      <p class="page-subtitle">Tus cámaras de prueba (Ryzen 5600X)</p>
+    </div>
+  </div>
+
+  <div class="page-header" style="margin-bottom: 20px; margin-top: 20px;">
+    <div>
+      <h3>Estado de cámaras</h3>
+    </div>
+    <button class="secondary" onclick="location.reload()">Actualizar</button>
+  </div>
+
+  <div class="grid" id="cameraGrid">
+    <p style="color: var(--text-secondary); grid-column: 1/-1; text-align: center; padding: 40px;">Cargando cámaras...</p>
+  </div>
+
+  <div class="page-header" style="margin-top: 40px; margin-bottom: 20px;">
+    <h3>Alertas recientes (Test Lab)</h3>
+  </div>
+
+  <div class="alerts-feed" id="testAlertsFeed">
+    <p style="color: var(--text-secondary); text-align: center; padding: 40px;">Sin alertas</p>
+  </div>
+
+  <div class="card" style="margin-top: 30px;">
+    <h3>📊 Estadísticas en tiempo real</h3>
+    <div class="grid" style="margin-top: 20px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; border-left: 3px solid var(--accent-purple);">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">FPS Promedio</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-purple);">0</div>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Video real-time</div>
+      </div>
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; border-left: 3px solid var(--accent-green);">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Latencia MQTT</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-green);">0 ms</div>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Publ/Sub</div>
+      </div>
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Alertas hoy</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-cyan);" id="statsAlerts">0</div>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Detectadas</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { apiGet } from '/auth.js';
+
+  const cameraGrid = document.getElementById('cameraGrid');
+  const testAlertsFeed = document.getElementById('testAlertsFeed');
+
+  // Cargar cámaras de test
+  async function loadTestCameras() {
+    try {
+      const cameras = await apiGet('/api/test-cameras') || [];
+
+      if (cameras.length === 0) {
+        cameraGrid.innerHTML = `
+          <div style="grid-column: 1/-1;">
+            <div class="card">
+              <p style="color: var(--text-secondary);">No hay cámaras configuradas en Test Lab aún.</p>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-top: 10px;">
+                Las cámaras aparecerán aquí cuando se envíen alertas a través de MQTT en el topic:
+              </p>
+              <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 6px; margin-top: 10px; font-family: monospace; font-size: 12px;">
+                deepcamera/test/alerts
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      cameraGrid.innerHTML = cameras.map(cam => `
+        <div class="camera-card">
+          <div class="camera-preview">
+            📹 ${cam.name}
+          </div>
+          <div class="camera-info">
+            <div class="camera-name">${cam.name}</div>
+            <div class="camera-location">${cam.location || 'Sin ubicación'}</div>
+            <div class="camera-status ${cam.status}">
+              ${cam.status === 'online' ? 'En línea' : 'Sin conexión'}
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+              ${cam.fps_current ? 'FPS: ' + cam.fps_current.toFixed(1) : 'Sin datos'}
+            </div>
+            ${cam.last_seen ? `
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                Última vista: ${new Date(cam.last_seen).toLocaleTimeString()}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      cameraGrid.innerHTML = `<div class="card"><p style="color: #EE5D50;">Error: ${err.message}</p></div>`;
+    }
+  }
+
+  // Cargar alertas de test lab
+  async function loadTestAlerts() {
+    try {
+      // Hacer fetch directo ya que no hay endpoint para test alerts
+      const response = await fetch('/api/test-alerts');
+      const alerts = await response.json() || [];
+
+      if (alerts.length === 0) {
+        testAlertsFeed.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px;">Sin alertas</p>';
+        return;
+      }
+
+      const today = new Date().toDateString();
+      const todayAlerts = alerts.filter(a => new Date(a.created_at).toDateString() === today);
+      document.getElementById('statsAlerts').textContent = todayAlerts.length;
+
+      testAlertsFeed.innerHTML = alerts.slice(0, 20).map(alert => `
+        <div class="alert-item">
+          <div class="alert-icon">📹</div>
+          <div class="alert-content">
+            <div class="alert-type">${alert.alert_type}</div>
+            <div class="alert-meta">
+              <span>${new Date(alert.created_at).toLocaleString()}</span>
+            </div>
+            <div class="alert-confidence">
+              Confianza: ${(alert.confidence * 100).toFixed(1)}%
+            </div>
+            ${alert.image_url ? `
+              <div class="alert-image" style="margin-top: 8px;">
+                <img src="${alert.image_url}" alt="Alert">
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error('Error loading test alerts:', err);
+    }
+  }
+
+  // Cargar datos iniciales
+  await loadTestCameras();
+  await loadTestAlerts();
+
+  // Recargar cada 10 segundos
+  setInterval(async () => {
+    await loadTestCameras();
+    await loadTestAlerts();
+  }, 10000);
+
+  // Socket.io para alertas en tiempo real
+  const script = document.createElement('script');
+  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+  document.head.appendChild(script);
+
+  script.onload = () => {
+    const socket = io();
+    socket.on('test_alert', () => {
+      loadTestCameras();
+      loadTestAlerts();
+    });
+  };
+</script>

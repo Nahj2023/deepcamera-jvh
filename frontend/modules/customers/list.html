@@ -1,0 +1,153 @@
+<div style="height: 100%;">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Clientes</h1>
+      <p class="page-subtitle">Empresas vigiladas con DeepCamera</p>
+    </div>
+    <button class="primary" onclick="showNewCustomerForm()">+ Nuevo cliente</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table id="customerTable">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Contacto</th>
+          <th>Cámaras</th>
+          <th>Alertas hoy</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="customerBody">
+        <tr><td colspan="7" style="text-align: center; padding: 40px;">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Modal para nuevo cliente -->
+  <div class="modal" id="customerModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Nuevo cliente</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="customerForm">
+        <div class="form-group">
+          <label>Nombre *</label>
+          <input type="text" name="name" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email">
+        </div>
+        <div class="form-group">
+          <label>Contacto</label>
+          <input type="text" name="contact_person">
+        </div>
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="tel" name="phone">
+        </div>
+        <div class="form-group">
+          <label>Dirección</label>
+          <textarea name="address" rows="3"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="secondary" onclick="closeModal()">Cancelar</button>
+          <button type="submit" class="primary">Crear cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { apiGet, apiPost, apiDelete, apiPut } from '/auth.js';
+
+  const customerTable = document.getElementById('customerTable');
+  const customerBody = document.getElementById('customerBody');
+  const customerModal = document.getElementById('customerModal');
+  const customerForm = document.getElementById('customerForm');
+
+  async function loadCustomers() {
+    try {
+      const customers = await apiGet('/api/customers') || [];
+
+      if (customers.length === 0) {
+        customerBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-secondary);">No hay clientes</td></tr>`;
+        return;
+      }
+
+      customerBody.innerHTML = customers.map(c => `
+        <tr>
+          <td><strong>${c.name}</strong></td>
+          <td>${c.email || '-'}</td>
+          <td>${c.contact_person || '-'}</td>
+          <td>${c.camera_count || 0}</td>
+          <td>${c.alerts_today || 0}</td>
+          <td>
+            <span class="status-badge status-${c.status === 'active' ? 'active' : 'inactive'}">
+              ${c.status === 'active' ? 'Activo' : 'Inactivo'}
+            </span>
+          </td>
+          <td>
+            <button class="secondary" style="font-size: 12px; padding: 4px 8px;" onclick="viewCustomer(${c.id})">
+              Ver
+            </button>
+            <button class="danger" style="font-size: 12px; padding: 4px 8px; margin-left: 4px;" onclick="deleteCustomer(${c.id})">
+              Eliminar
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      customerBody.innerHTML = `<tr><td colspan="7" style="color: #EE5D50;">${err.message}</td></tr>`;
+    }
+  }
+
+  window.showNewCustomerForm = () => {
+    customerForm.reset();
+    customerModal.classList.add('show');
+  };
+
+  window.closeModal = () => {
+    customerModal.classList.remove('show');
+  };
+
+  window.deleteCustomer = async (id) => {
+    if (confirm('¿Eliminar cliente?')) {
+      try {
+        await apiDelete(`/api/customers/${id}`);
+        await loadCustomers();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+  };
+
+  window.viewCustomer = (id) => {
+    alert('Detalle de cliente (por implementar)');
+  };
+
+  customerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(customerForm);
+    const data = Object.fromEntries(formData);
+
+    try {
+      await apiPost('/api/customers', data);
+      closeModal();
+      await loadCustomers();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  });
+
+  // Cargar datos iniciales
+  await loadCustomers();
+
+  // Recargar cada 30 segundos
+  setInterval(loadCustomers, 30000);
+</script>

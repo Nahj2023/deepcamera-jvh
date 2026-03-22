@@ -1,0 +1,237 @@
+<div style="height: 100%;">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Reportes</h1>
+      <p class="page-subtitle">Exportar datos de alertas</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Generar reporte</h3>
+
+    <div class="filters-bar" style="margin-top: 20px;">
+      <div class="filter-group">
+        <label>Cliente:</label>
+        <select id="reportCustomer">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Desde:</label>
+        <input type="date" id="reportFrom">
+      </div>
+      <div class="filter-group">
+        <label>Hasta:</label>
+        <input type="date" id="reportTo">
+      </div>
+      <div class="filter-group">
+        <label>Tipo de alerta:</label>
+        <select id="reportType">
+          <option value="">Todos</option>
+          <option value="person">Persona</option>
+          <option value="face">Rostro</option>
+          <option value="fall">Caída</option>
+          <option value="object">Objeto</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; gap: 12px;">
+      <button class="primary" onclick="exportExcel()">📊 Descargar Excel</button>
+      <button class="secondary" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <h3>Estadísticas</h3>
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 20px;">
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px;">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Total alertas</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-purple);" id="statTotal">0</div>
+      </div>
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px;">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Personas detectadas</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-cyan);" id="statPersons">0</div>
+      </div>
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px;">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Confianza promedio</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-green);" id="statConfidence">0%</div>
+      </div>
+      <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px;">
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Hora pico</div>
+        <div style="font-size: 24px; font-weight: 600; color: var(--accent-orange);" id="statPeakHour">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrapper" style="margin-top: 20px;">
+    <table id="reportTable">
+      <thead>
+        <tr>
+          <th>Fecha/Hora</th>
+          <th>Cliente</th>
+          <th>Cámara</th>
+          <th>Tipo</th>
+          <th>Confianza</th>
+        </tr>
+      </thead>
+      <tbody id="reportBody">
+        <tr><td colspan="5" style="text-align: center; padding: 20px;">Cargando datos...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <style>
+    @media print {
+      .card, .table-wrapper { page-break-inside: avoid; }
+      .filters-bar { display: none; }
+      button { display: none; }
+    }
+  </style>
+</div>
+
+<script type="module">
+  import { apiGet } from '/auth.js';
+
+  const reportCustomer = document.getElementById('reportCustomer');
+  const reportFrom = document.getElementById('reportFrom');
+  const reportTo = document.getElementById('reportTo');
+  const reportType = document.getElementById('reportType');
+  const reportBody = document.getElementById('reportBody');
+
+  let customers = [];
+  let allAlerts = [];
+
+  async function loadCustomers() {
+    try {
+      customers = await apiGet('/api/customers') || [];
+      reportCustomer.innerHTML = '<option value="">Todos</option>';
+      customers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        reportCustomer.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Error loading customers:', err);
+    }
+  }
+
+  async function loadAlerts() {
+    try {
+      allAlerts = await apiGet('/api/alerts?limit=500') || [];
+      updateReport();
+    } catch (err) {
+      reportBody.innerHTML = `<tr><td colspan="5" style="color: #EE5D50;">${err.message}</td></tr>`;
+    }
+  }
+
+  function updateReport() {
+    let filtered = allAlerts;
+
+    // Filtrar por cliente
+    if (reportCustomer.value) {
+      filtered = filtered.filter(a => a.customer_id == reportCustomer.value);
+    }
+
+    // Filtrar por tipo
+    if (reportType.value) {
+      filtered = filtered.filter(a => a.alert_type === reportType.value);
+    }
+
+    // Filtrar por fechas
+    if (reportFrom.value) {
+      const from = new Date(reportFrom.value);
+      filtered = filtered.filter(a => new Date(a.created_at) >= from);
+    }
+    if (reportTo.value) {
+      const to = new Date(reportTo.value);
+      to.setHours(23, 59, 59);
+      filtered = filtered.filter(a => new Date(a.created_at) <= to);
+    }
+
+    // Renderizar tabla
+    if (filtered.length === 0) {
+      reportBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">No hay datos</td></tr>`;
+    } else {
+      reportBody.innerHTML = filtered.map(a => `
+        <tr>
+          <td>${new Date(a.created_at).toLocaleString()}</td>
+          <td>${customers.find(c => c.id === a.customer_id)?.name || '-'}</td>
+          <td>${a.camera_id || '-'}</td>
+          <td>${a.alert_type}</td>
+          <td>${(a.confidence * 100).toFixed(1)}%</td>
+        </tr>
+      `).join('');
+    }
+
+    // Actualizar estadísticas
+    document.getElementById('statTotal').textContent = filtered.length;
+
+    const persons = filtered.filter(a => a.alert_type === 'person').length;
+    document.getElementById('statPersons').textContent = persons;
+
+    const avgConfidence = filtered.length > 0
+      ? (filtered.reduce((sum, a) => sum + a.confidence, 0) / filtered.length * 100).toFixed(1)
+      : 0;
+    document.getElementById('statConfidence').textContent = avgConfidence + '%';
+
+    // Hora pico
+    if (filtered.length > 0) {
+      const hourCounts = {};
+      filtered.forEach(a => {
+        const hour = new Date(a.created_at).getHours();
+        hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+      });
+      const peakHour = Object.keys(hourCounts).reduce((a, b) =>
+        hourCounts[a] > hourCounts[b] ? a : b
+      );
+      document.getElementById('statPeakHour').textContent = peakHour + ':00';
+    }
+  }
+
+  window.exportExcel = async () => {
+    let filtered = allAlerts;
+    if (reportCustomer.value) filtered = filtered.filter(a => a.customer_id == reportCustomer.value);
+    if (reportType.value) filtered = filtered.filter(a => a.alert_type === reportType.value);
+    if (reportFrom.value) filtered = filtered.filter(a => new Date(a.created_at) >= new Date(reportFrom.value));
+    if (reportTo.value) {
+      const to = new Date(reportTo.value);
+      to.setHours(23, 59, 59);
+      filtered = filtered.filter(a => new Date(a.created_at) <= to);
+    }
+
+    const csv = [
+      ['Fecha/Hora', 'Cliente', 'Tipo', 'Confianza', 'Descripción'],
+      ...filtered.map(a => [
+        new Date(a.created_at).toLocaleString(),
+        customers.find(c => c.id === a.customer_id)?.name || '-',
+        a.alert_type,
+        (a.confidence * 100).toFixed(1) + '%',
+        a.description || ''
+      ])
+    ].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deepcamera-reporte-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Event listeners
+  [reportCustomer, reportFrom, reportTo, reportType].forEach(el => {
+    el.addEventListener('change', updateReport);
+  });
+
+  // Cargar datos iniciales
+  const today = new Date();
+  const month = new Date(today.getFullYear(), today.getMonth(), 1);
+  reportFrom.value = month.toISOString().split('T')[0];
+  reportTo.value = today.toISOString().split('T')[0];
+
+  await loadCustomers();
+  await loadAlerts();
+</script>

@@ -1,0 +1,187 @@
+<div style="height: 100%;">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Feed de Alertas</h1>
+      <p class="page-subtitle">Alertas en tiempo real de todas tus cámaras</p>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Cliente:</label>
+      <select id="filterCustomer">
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Tipo:</label>
+      <select id="filterType">
+        <option value="">Todos</option>
+        <option value="person">Persona</option>
+        <option value="face">Rostro</option>
+        <option value="fall">Caída</option>
+        <option value="object">Objeto</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Estado:</label>
+      <select id="filterStatus">
+        <option value="">Todos</option>
+        <option value="unread">No leídas</option>
+        <option value="acknowledged">Leídas</option>
+      </select>
+    </div>
+    <button class="secondary" onclick="location.reload()" style="margin-left: auto;">Actualizar</button>
+  </div>
+
+  <div class="alerts-feed" id="alertsFeed">
+    <p style="color: var(--text-secondary); text-align: center; padding: 40px;">Cargando alertas...</p>
+  </div>
+</div>
+
+<script type="module">
+  import { apiGet, apiPut } from '/auth.js';
+
+  const alertsFeed = document.getElementById('alertsFeed');
+  const filterCustomer = document.getElementById('filterCustomer');
+  const filterType = document.getElementById('filterType');
+  const filterStatus = document.getElementById('filterStatus');
+
+  let allAlerts = [];
+  let customers = [];
+
+  // Cargar clientes para el filtro
+  async function loadCustomers() {
+    try {
+      customers = await apiGet('/api/customers') || [];
+      filterCustomer.innerHTML = '<option value="">Todos</option>';
+      customers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        filterCustomer.appendChild(opt);
+      });
+    } catch (err) {
+      console.error('Error loading customers:', err);
+    }
+  }
+
+  // Cargar alertas
+  async function loadAlerts() {
+    try {
+      allAlerts = await apiGet('/api/alerts?limit=100') || [];
+      renderAlerts();
+    } catch (err) {
+      alertsFeed.innerHTML = '<div class="card"><p style="color: #EE5D50;">Error: ' + err.message + '</p></div>';
+    }
+  }
+
+  // Renderizar alertas con filtros
+  function renderAlerts() {
+    let filtered = allAlerts;
+
+    if (filterCustomer.value) {
+      filtered = filtered.filter(a => a.customer_id == filterCustomer.value);
+    }
+
+    if (filterType.value) {
+      filtered = filtered.filter(a => a.alert_type === filterType.value);
+    }
+
+    if (filterStatus.value === 'unread') {
+      filtered = filtered.filter(a => !a.acknowledged_at);
+    } else if (filterStatus.value === 'acknowledged') {
+      filtered = filtered.filter(a => a.acknowledged_at);
+    }
+
+    if (filtered.length === 0) {
+      alertsFeed.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No hay alertas</div>';
+      return;
+    }
+
+    alertsFeed.innerHTML = filtered.map(alert => `
+      <div class="alert-item">
+        <div class="alert-icon">
+          ${getAlertIcon(alert.alert_type)}
+        </div>
+        <div class="alert-content">
+          <div class="alert-type">${formatAlertType(alert.alert_type)}</div>
+          <div class="alert-meta">
+            <span>${new Date(alert.created_at).toLocaleString()}</span>
+            <span>${alert.description || 'Sin descripción'}</span>
+          </div>
+          <div class="alert-confidence">
+            Confianza: ${(alert.confidence * 100).toFixed(1)}%
+          </div>
+          ${alert.image_url ? `
+            <div class="alert-image" style="margin-top: 8px;">
+              <img src="${alert.image_url}" alt="Alert">
+            </div>
+          ` : ''}
+          ${!alert.acknowledged_at ? `
+            <div class="alert-action">
+              <button class="secondary" onclick="acknowledgeAlert(${alert.id})">
+                ✓ Marcar como leída
+              </button>
+            </div>
+          ` : '<div style="color: var(--accent-green); font-size: 12px; margin-top: 8px;">✓ Leída</div>'}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function getAlertIcon(type) {
+    const icons = {
+      person: '👤',
+      face: '😊',
+      fall: '⬇️',
+      object: '📦',
+      unknown: '⚠️'
+    };
+    return icons[type] || icons.unknown;
+  }
+
+  function formatAlertType(type) {
+    const names = {
+      person: 'Persona detectada',
+      face: 'Rostro detectado',
+      fall: 'Caída detectada',
+      object: 'Objeto detectado',
+      unknown: 'Alerta desconocida'
+    };
+    return names[type] || names.unknown;
+  }
+
+  window.acknowledgeAlert = async (alertId) => {
+    try {
+      await apiPut(`/api/alerts/${alertId}/acknowledge`, {});
+      await loadAlerts();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  // Event listeners
+  filterCustomer.addEventListener('change', renderAlerts);
+  filterType.addEventListener('change', renderAlerts);
+  filterStatus.addEventListener('change', renderAlerts);
+
+  // Cargar datos iniciales
+  await loadCustomers();
+  await loadAlerts();
+
+  // Recargar cada 15 segundos
+  setInterval(loadAlerts, 15000);
+
+  // Socket.io para alertas en tiempo real
+  const script = document.createElement('script');
+  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+  document.head.appendChild(script);
+
+  script.onload = () => {
+    const socket = io();
+    socket.on('new_alert', () => {
+      loadAlerts();
+    });
+  };
+</script>

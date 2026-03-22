@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepCamera Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="module-body">
+  <div class="dashboard-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">DC</div>
+        <div class="sidebar-title">DeepCamera</div>
+      </div>
+
+      <nav class="nav-menu">
+        <li class="nav-item">
+          <button class="nav-link active" data-module="alerts">
+            🔔 Alertas
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-module="test-lab">
+            🧪 Test Lab
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-module="customers">
+            👥 Clientes
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-module="cameras">
+            📹 Cámaras
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-module="reports">
+            📊 Reportes
+          </button>
+        </li>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">A</div>
+          <div class="user-details">
+            <div class="user-name" data-user-name>Admin</div>
+            <div class="user-role" data-user-role>superadmin</div>
+          </div>
+        </div>
+        <button class="secondary" style="width: 100%; border-color: #EE5D50; color: #EE5D50;" id="logoutBtn">
+          Logout
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <!-- HEADER -->
+      <header class="header">
+        <div class="header-left">
+          <div>
+            <div class="header-title" id="pageTitle">Alertas</div>
+            <div class="header-subtitle" id="pageSubtitle">Feed en tiempo real</div>
+          </div>
+
+          <div class="kpi-bar">
+            <div class="kpi">
+              <div class="kpi-value" id="kpiAlerts">0</div>
+              <div class="kpi-label">Alertas hoy</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-value" id="kpiCustomers">0</div>
+              <div class="kpi-label">Clientes</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-value" id="kpiCameras">0</div>
+              <div class="kpi-label">Cámaras online</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div id="alertNotif" style="display: none;">
+            <span class="alert-badge">Nuevo</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT AREA -->
+      <div class="module-container">
+        <iframe id="moduleFrame" style="display: none; width: 100%; height: 100%; border: none;"></iframe>
+        <div id="moduleContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { requireAuth, getUser, logout, apiGet } from '/auth.js';
+
+    // Verificar autenticación
+    requireAuth();
+
+    // Datos de usuario
+    const user = getUser();
+    if (user) {
+      document.querySelector('[data-user-name]').textContent = user.username;
+      document.querySelector('[data-user-role]').textContent = user.role;
+      document.getElementById('userAvatar').textContent = user.username.charAt(0).toUpperCase();
+    }
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+
+    // Módulos disponibles
+    const modules = {
+      alerts: { title: 'Alertas', subtitle: 'Feed en tiempo real', path: '/modules/alerts/list.html' },
+      'test-lab': { title: 'Test Lab', subtitle: 'Tus cámaras de prueba', path: '/modules/test-lab/index.html' },
+      customers: { title: 'Clientes', subtitle: 'Empresas vigiladas', path: '/modules/customers/list.html' },
+      cameras: { title: 'Cámaras', subtitle: 'Estado de cámaras', path: '/modules/cameras/list.html' },
+      reports: { title: 'Reportes', subtitle: 'Exportar datos', path: '/modules/reports/index.html' }
+    };
+
+    // Cargar módulo
+    async function loadModule(moduleName) {
+      const module = modules[moduleName];
+      if (!module) return;
+
+      document.getElementById('pageTitle').textContent = module.title;
+      document.getElementById('pageSubtitle').textContent = module.subtitle;
+
+      const navLinks = document.querySelectorAll('.nav-link');
+      navLinks.forEach(link => {
+        link.classList.toggle('active', link.dataset.module === moduleName);
+      });
+
+      const moduleContent = document.getElementById('moduleContent');
+      try {
+        const res = await fetch(module.path);
+        if (res.ok) {
+          moduleContent.innerHTML = await res.text();
+          // Ejecutar scripts en el contenido cargado
+          moduleContent.querySelectorAll('script').forEach(script => {
+            const newScript = document.createElement('script');
+            newScript.type = script.type || 'module';
+            newScript.textContent = script.textContent;
+            moduleContent.appendChild(newScript);
+          });
+        }
+      } catch (err) {
+        moduleContent.innerHTML = `<div class="card"><p style="color: #EE5D50;">Error al cargar módulo: ${err.message}</p></div>`;
+      }
+    }
+
+    // Event listeners para navegación
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.addEventListener('click', () => {
+        loadModule(link.dataset.module);
+      });
+    });
+
+    // Cargar módulo inicial (alertas)
+    loadModule('alerts');
+
+    // Actualizar KPIs cada 10 segundos
+    async function updateKPIs() {
+      try {
+        const alerts = await apiGet('/api/alerts');
+        const customers = await apiGet('/api/customers');
+        if (alerts && customers) {
+          const alertsToday = alerts.filter(a => {
+            const created = new Date(a.created_at);
+            return created.toDateString() === new Date().toDateString();
+          }).length;
+
+          document.getElementById('kpiAlerts').textContent = alertsToday;
+          document.getElementById('kpiCustomers').textContent = customers.length;
+        }
+      } catch (err) {
+        console.error('KPI update error:', err);
+      }
+    }
+
+    updateKPIs();
+    setInterval(updateKPIs, 10000);
+
+    // Socket.io para alertas en tiempo real
+    const script = document.createElement('script');
+    script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      const socket = io();
+
+      socket.on('new_alert', (alert) => {
+        const notif = document.getElementById('alertNotif');
+        notif.style.display = 'block';
+        setTimeout(() => notif.style.display = 'none', 5000);
+        updateKPIs();
+      });
+
+      socket.on('test_alert', (alert) => {
+        updateKPIs();
+      });
+    };
+  </script>
+</body>
+</html>
