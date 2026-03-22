@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepCamera Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body class="module-body">
   <div class="dashboard-container">
@@ -19,27 +19,27 @@
       <nav class="nav-menu">
         <li class="nav-item">
           <button class="nav-link active" data-module="alerts">
-            🔔 Alertas
+            Alertas
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="test-lab">
-            🧪 Test Lab
+            Test Lab
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="customers">
-            👥 Clientes
+            Clientes
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="cameras">
-            📹 Cámaras
+            Camaras
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="reports">
-            📊 Reportes
+            Reportes
           </button>
         </li>
       </nav>
@@ -79,7 +79,7 @@
             </div>
             <div class="kpi">
               <div class="kpi-value" id="kpiCameras">0</div>
-              <div class="kpi-label">Cámaras online</div>
+              <div class="kpi-label">Camaras online</div>
             </div>
           </div>
         </div>
@@ -100,12 +100,10 @@
   </div>
 
   <script type="module">
-    import { requireAuth, getUser, logout, apiGet } from '/auth.js';
+    import { requireAuth, getUser, logout, apiGet } from './auth.js';
 
-    // Verificar autenticación
     requireAuth();
 
-    // Datos de usuario
     const user = getUser();
     if (user) {
       document.querySelector('[data-user-name]').textContent = user.username;
@@ -113,19 +111,16 @@
       document.getElementById('userAvatar').textContent = user.username.charAt(0).toUpperCase();
     }
 
-    // Logout
     document.getElementById('logoutBtn').addEventListener('click', logout);
 
-    // Módulos disponibles
     const modules = {
-      alerts: { title: 'Alertas', subtitle: 'Feed en tiempo real', path: '/modules/alerts/list.html' },
-      'test-lab': { title: 'Test Lab', subtitle: 'Tus cámaras de prueba', path: '/modules/test-lab/index.html' },
-      customers: { title: 'Clientes', subtitle: 'Empresas vigiladas', path: '/modules/customers/list.html' },
-      cameras: { title: 'Cámaras', subtitle: 'Estado de cámaras', path: '/modules/cameras/list.html' },
-      reports: { title: 'Reportes', subtitle: 'Exportar datos', path: '/modules/reports/index.html' }
+      alerts: { title: 'Alertas', subtitle: 'Feed en tiempo real', path: 'modules/alerts/list.html' },
+      'test-lab': { title: 'Test Lab', subtitle: 'Tus camaras de prueba', path: 'modules/test-lab/index.html' },
+      customers: { title: 'Clientes', subtitle: 'Empresas vigiladas', path: 'modules/customers/list.html' },
+      cameras: { title: 'Camaras', subtitle: 'Estado de camaras', path: 'modules/cameras/list.html' },
+      reports: { title: 'Reportes', subtitle: 'Exportar datos', path: 'modules/reports/index.html' }
     };
 
-    // Cargar módulo
     async function loadModule(moduleName) {
       const module = modules[moduleName];
       if (!module) return;
@@ -143,7 +138,6 @@
         const res = await fetch(module.path);
         if (res.ok) {
           moduleContent.innerHTML = await res.text();
-          // Ejecutar scripts en el contenido cargado
           moduleContent.querySelectorAll('script').forEach(script => {
             const newScript = document.createElement('script');
             newScript.type = script.type || 'module';
@@ -152,25 +146,22 @@
           });
         }
       } catch (err) {
-        moduleContent.innerHTML = `<div class="card"><p style="color: #EE5D50;">Error al cargar módulo: ${err.message}</p></div>`;
+        moduleContent.innerHTML = `<div class="card"><p style="color: #EE5D50;">Error al cargar modulo: ${err.message}</p></div>`;
       }
     }
 
-    // Event listeners para navegación
     document.querySelectorAll('.nav-link').forEach(link => {
       link.addEventListener('click', () => {
         loadModule(link.dataset.module);
       });
     });
 
-    // Cargar módulo inicial (alertas)
     loadModule('alerts');
 
-    // Actualizar KPIs cada 10 segundos
     async function updateKPIs() {
       try {
-        const alerts = await apiGet('/api/alerts');
-        const customers = await apiGet('/api/customers');
+        const alerts = await apiGet('api/alerts');
+        const customers = await apiGet('api/customers');
         if (alerts && customers) {
           const alertsToday = alerts.filter(a => {
             const created = new Date(a.created_at);
@@ -188,25 +179,8 @@
     updateKPIs();
     setInterval(updateKPIs, 10000);
 
-    // Socket.io para alertas en tiempo real
-    const script = document.createElement('script');
-    script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
-    document.head.appendChild(script);
-
-    script.onload = () => {
-      const socket = io();
-
-      socket.on('new_alert', (alert) => {
-        const notif = document.getElementById('alertNotif');
-        notif.style.display = 'block';
-        setTimeout(() => notif.style.display = 'none', 5000);
-        updateKPIs();
-      });
-
-      socket.on('test_alert', (alert) => {
-        updateKPIs();
-      });
-    };
+    // Real-time via polling (Passenger no soporta WebSockets)
+    // KPIs se actualizan cada 10s via setInterval arriba
   </script>
 </body>
 </html>

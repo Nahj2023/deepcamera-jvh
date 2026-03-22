@@ -1,10 +1,9 @@
 /**
- * Camera Handler — CRUD cámaras
+ * Camera Handler — CRUD cámaras (SQLite)
  */
 
 /**
  * GET /api/cameras
- * Lista cámaras con filtros opcionales
  */
 export const getCameras = async (req, res, db) => {
   const { customer_id } = req.query;
@@ -13,15 +12,15 @@ export const getCameras = async (req, res, db) => {
   const params = [];
 
   if (customer_id) {
-    query += ' AND customer_id = $1';
+    query += ' AND customer_id = ?';
     params.push(customer_id);
   }
 
   query += ' ORDER BY name';
 
   try {
-    const result = await db.query(query, params);
-    return res.json(result.rows);
+    const rows = await db.all(query, params);
+    return res.json(rows);
   } catch (err) {
     console.error('Get cameras error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -29,32 +28,7 @@ export const getCameras = async (req, res, db) => {
 };
 
 /**
- * GET /api/cameras/:id
- * Obtiene detalle de una cámara
- */
-export const getCameraById = async (req, res, db) => {
-  const { id } = req.params;
-
-  try {
-    const result = await db.query(
-      'SELECT * FROM dc_cameras WHERE id = $1',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Camera not found' });
-    }
-
-    return res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Get camera error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-};
-
-/**
  * POST /api/cameras
- * Crea nueva cámara
  */
 export const createCamera = async (req, res, db) => {
   const { customer_id, name, location, camera_url, camera_type } = req.body;
@@ -68,14 +42,14 @@ export const createCamera = async (req, res, db) => {
   }
 
   try {
-    const result = await db.query(
+    const result = await db.run(
       `INSERT INTO dc_cameras (customer_id, name, location, camera_url, camera_type)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
+       VALUES (?, ?, ?, ?, ?)`,
       [customer_id, name, location || null, camera_url, camera_type || 'rtsp']
     );
 
-    return res.status(201).json(result.rows[0]);
+    const row = await db.get('SELECT * FROM dc_cameras WHERE id = ?', [result.lastID]);
+    return res.status(201).json(row);
   } catch (err) {
     console.error('Create camera error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -84,7 +58,6 @@ export const createCamera = async (req, res, db) => {
 
 /**
  * PUT /api/cameras/:id
- * Actualiza cámara
  */
 export const updateCamera = async (req, res, db) => {
   const { id } = req.params;
@@ -95,27 +68,28 @@ export const updateCamera = async (req, res, db) => {
   }
 
   try {
-    const result = await db.query(
-      `UPDATE dc_cameras
-       SET name = COALESCE($1, name),
-           location = COALESCE($2, location),
-           camera_url = COALESCE($3, camera_url),
-           camera_type = COALESCE($4, camera_type),
-           status = COALESCE($5, status),
-           fps_current = COALESCE($6, fps_current),
-           fps_target = COALESCE($7, fps_target),
-           last_seen = CASE WHEN $5 IS NOT NULL THEN NOW() ELSE last_seen END,
-           updated_at = NOW()
-       WHERE id = $8
-       RETURNING *`,
-      [name, location, camera_url, camera_type, status, fps_current, fps_target, id]
-    );
-
-    if (result.rows.length === 0) {
+    const existing = await db.get('SELECT * FROM dc_cameras WHERE id = ?', [id]);
+    if (!existing) {
       return res.status(404).json({ error: 'Camera not found' });
     }
 
-    return res.json(result.rows[0]);
+    await db.run(
+      `UPDATE dc_cameras
+       SET name = COALESCE(?, name),
+           location = COALESCE(?, location),
+           camera_url = COALESCE(?, camera_url),
+           camera_type = COALESCE(?, camera_type),
+           status = COALESCE(?, status),
+           fps_current = COALESCE(?, fps_current),
+           fps_target = COALESCE(?, fps_target),
+           last_seen = CASE WHEN ? IS NOT NULL THEN datetime('now') ELSE last_seen END,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+      [name, location, camera_url, camera_type, status, fps_current, fps_target, status, id]
+    );
+
+    const row = await db.get('SELECT * FROM dc_cameras WHERE id = ?', [id]);
+    return res.json(row);
   } catch (err) {
     console.error('Update camera error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -123,44 +97,12 @@ export const updateCamera = async (req, res, db) => {
 };
 
 /**
- * DELETE /api/cameras/:id
- * Elimina cámara
- */
-export const deleteCamera = async (req, res, db) => {
-  const { id } = req.params;
-
-  if (req.user.role !== 'superadmin') {
-    return res.status(403).json({ error: 'Only superadmin can delete' });
-  }
-
-  try {
-    const result = await db.query(
-      'DELETE FROM dc_cameras WHERE id = $1 RETURNING id',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Camera not found' });
-    }
-
-    return res.json({ message: 'Camera deleted' });
-  } catch (err) {
-    console.error('Delete camera error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-};
-
-/**
  * GET /api/test-cameras
- * Obtiene cámaras del test lab
  */
 export const getTestCameras = async (req, res, db) => {
   try {
-    const result = await db.query(
-      'SELECT * FROM dc_test_cameras ORDER BY name'
-    );
-
-    return res.json(result.rows);
+    const rows = await db.all('SELECT * FROM dc_test_cameras ORDER BY name');
+    return res.json(rows);
   } catch (err) {
     console.error('Get test cameras error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -169,7 +111,6 @@ export const getTestCameras = async (req, res, db) => {
 
 /**
  * POST /api/test-cameras
- * Crea cámara de test
  */
 export const createTestCamera = async (req, res, db) => {
   const { name, rtsp_url, location } = req.body;
@@ -179,14 +120,13 @@ export const createTestCamera = async (req, res, db) => {
   }
 
   try {
-    const result = await db.query(
-      `INSERT INTO dc_test_cameras (name, rtsp_url, location)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
+    const result = await db.run(
+      'INSERT INTO dc_test_cameras (name, rtsp_url, location) VALUES (?, ?, ?)',
       [name, rtsp_url, location || null]
     );
 
-    return res.status(201).json(result.rows[0]);
+    const row = await db.get('SELECT * FROM dc_test_cameras WHERE id = ?', [result.lastID]);
+    return res.status(201).json(row);
   } catch (err) {
     console.error('Create test camera error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -195,29 +135,28 @@ export const createTestCamera = async (req, res, db) => {
 
 /**
  * PUT /api/test-cameras/:id/status
- * Actualiza estado de cámara de test (heartbeat)
  */
 export const updateTestCameraStatus = async (req, res, db) => {
   const { id } = req.params;
   const { status, fps_current } = req.body;
 
   try {
-    const result = await db.query(
+    const result = await db.run(
       `UPDATE dc_test_cameras
-       SET status = COALESCE($1, status),
-           fps_current = COALESCE($2, fps_current),
-           last_seen = NOW(),
-           updated_at = NOW()
-       WHERE id = $3
-       RETURNING *`,
+       SET status = COALESCE(?, status),
+           fps_current = COALESCE(?, fps_current),
+           last_seen = datetime('now'),
+           updated_at = datetime('now')
+       WHERE id = ?`,
       [status, fps_current, id]
     );
 
-    if (result.rows.length === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Test camera not found' });
     }
 
-    return res.json(result.rows[0]);
+    const row = await db.get('SELECT * FROM dc_test_cameras WHERE id = ?', [id]);
+    return res.json(row);
   } catch (err) {
     console.error('Update test camera status error:', err);
     return res.status(500).json({ error: 'Server error' });

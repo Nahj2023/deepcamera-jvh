@@ -3,7 +3,6 @@ import { generateToken } from '../middleware/auth.js';
 
 /**
  * POST /api/auth/login
- * Autentica usuario y retorna JWT
  */
 export const login = async (req, res, db) => {
   const { username, password } = req.body;
@@ -13,16 +12,15 @@ export const login = async (req, res, db) => {
   }
 
   try {
-    const result = await db.query(
-      'SELECT id, username, email, role, password_hash FROM dc_users WHERE username = $1',
+    const user = await db.get(
+      'SELECT id, username, email, role, password_hash FROM dc_users WHERE username = ?',
       [username]
     );
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const user = result.rows[0];
     const validPassword = await bcrypt.compare(password, user.password_hash);
 
     if (!validPassword) {
@@ -48,20 +46,19 @@ export const login = async (req, res, db) => {
 
 /**
  * GET /api/auth/me
- * Retorna datos del usuario autenticado
  */
 export const getMe = async (req, res, db) => {
   try {
-    const result = await db.query(
-      'SELECT id, username, email, role, created_at FROM dc_users WHERE id = $1',
+    const user = await db.get(
+      'SELECT id, username, email, role, created_at FROM dc_users WHERE id = ?',
       [req.user.id]
     );
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    return res.json(result.rows[0]);
+    return res.json(user);
   } catch (err) {
     console.error('Get me error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -69,8 +66,7 @@ export const getMe = async (req, res, db) => {
 };
 
 /**
- * POST /api/auth/register (solo para superadmin)
- * Crea nuevo usuario
+ * POST /api/auth/register (solo superadmin)
  */
 export const register = async (req, res, db) => {
   const { username, email, password, role } = req.body;
@@ -86,14 +82,19 @@ export const register = async (req, res, db) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await db.query(
-      'INSERT INTO dc_users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+    const result = await db.run(
+      'INSERT INTO dc_users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
       [username, email || null, hashedPassword, role || 'admin']
     );
 
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json({
+      id: result.lastID,
+      username,
+      email: email || null,
+      role: role || 'admin'
+    });
   } catch (err) {
-    if (err.code === '23505') {
+    if (err.message && err.message.includes('UNIQUE')) {
       return res.status(400).json({ error: 'Username already exists' });
     }
     console.error('Register error:', err);

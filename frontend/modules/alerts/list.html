@@ -40,7 +40,7 @@
 </div>
 
 <script type="module">
-  import { apiGet, apiPut } from '/auth.js';
+  import { apiGet, apiPut } from './auth.js';
 
   const alertsFeed = document.getElementById('alertsFeed');
   const filterCustomer = document.getElementById('filterCustomer');
@@ -173,15 +173,5 @@
   // Recargar cada 15 segundos
   setInterval(loadAlerts, 15000);
 
-  // Socket.io para alertas en tiempo real
-  const script = document.createElement('script');
-  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
-  document.head.appendChild(script);
-
-  script.onload = () => {
-    const socket = io();
-    socket.on('new_alert', () => {
-      loadAlerts();
-    });
-  };
+  // Alertas se recargan cada 15s via setInterval
 </script>

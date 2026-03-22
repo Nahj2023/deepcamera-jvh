@@ -37,7 +37,7 @@
 </div>
 
 <script type="module">
-  import { apiGet } from '/auth.js';
+  import { apiGet } from './auth.js';
 
   const filterCustomer = document.getElementById('filterCustomer');
   const cameraBody = document.getElementById('cameraBody');
@@ -107,15 +107,5 @@
   // Recargar cada 15 segundos
   setInterval(loadCameras, 15000);
 
-  // Socket.io para actualizaciones en tiempo real
-  const script = document.createElement('script');
-  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
-  document.head.appendChild(script);
-
-  script.onload = () => {
-    const socket = io();
-    socket.on('camera_status', () => {
-      loadCameras();
-    });
-  };
+  // Datos se recargan cada 15s via setInterval
 </script>

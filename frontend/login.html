@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeepCamera — Login</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="login-container">
@@ -32,7 +32,7 @@
   </div>
 
   <script type="module">
-    import { login } from '/auth.js';
+    import { login } from './auth.js';
 
     const loginForm = document.getElementById('loginForm');
     const errorMsg = document.getElementById('errorMsg');
@@ -47,7 +47,7 @@
 
       try {
         await login(username, password);
-        window.location.href = '/dashboard.html';
+        window.location.href = 'dashboard.html';
       } catch (err) {
         errorMsg.textContent = err.message;
         errorMsg.classList.add('show');

@@ -1,52 +1,46 @@
 /**
- * Alert Handler — CRUD alertas
+ * Alert Handler — CRUD alertas (SQLite)
  */
 
 /**
  * GET /api/alerts
- * Lista alertas con filtros opcionales
  */
 export const getAlerts = async (req, res, db) => {
   const { customer_id, type, from, to, limit } = req.query;
 
   let query = 'SELECT * FROM dc_alerts WHERE 1=1';
   const params = [];
-  let paramIndex = 1;
 
   if (customer_id) {
-    query += ` AND customer_id = $${paramIndex}`;
+    query += ' AND customer_id = ?';
     params.push(customer_id);
-    paramIndex++;
   }
 
   if (type) {
-    query += ` AND alert_type = $${paramIndex}`;
+    query += ' AND alert_type = ?';
     params.push(type);
-    paramIndex++;
   }
 
   if (from) {
-    query += ` AND created_at >= $${paramIndex}`;
+    query += ' AND created_at >= ?';
     params.push(from);
-    paramIndex++;
   }
 
   if (to) {
-    query += ` AND created_at <= $${paramIndex}`;
+    query += ' AND created_at <= ?';
     params.push(to);
-    paramIndex++;
   }
 
   query += ' ORDER BY created_at DESC';
 
   if (limit) {
-    query += ` LIMIT $${paramIndex}`;
-    params.push(limit);
+    query += ' LIMIT ?';
+    params.push(parseInt(limit));
   }
 
   try {
-    const result = await db.query(query, params);
-    return res.json(result.rows);
+    const rows = await db.all(query, params);
+    return res.json(rows);
   } catch (err) {
     console.error('Get alerts error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -54,32 +48,9 @@ export const getAlerts = async (req, res, db) => {
 };
 
 /**
- * GET /api/alerts/:id
- * Obtiene detalle de una alerta
+ * POST /api/alerts (desde edge con API key)
  */
-export const getAlertById = async (req, res, db) => {
-  const { id } = req.params;
-
-  try {
-    const result = await db.query('SELECT * FROM dc_alerts WHERE id = $1', [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Alert not found' });
-    }
-
-    return res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Get alert error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-};
-
-/**
- * POST /api/alerts
- * Crea nueva alerta (desde edge con API key)
- * Autenticado por API key, no JWT
- */
-export const createAlert = async (req, res, db, customer) => {
+export const createAlert = async (req, res, db) => {
   const { camera_id, alert_type, description, confidence, image_url, video_url, metadata } = req.body;
 
   if (!alert_type) {
@@ -87,14 +58,14 @@ export const createAlert = async (req, res, db, customer) => {
   }
 
   try {
-    const result = await db.query(
+    const result = await db.run(
       `INSERT INTO dc_alerts (customer_id, camera_id, alert_type, description, confidence, image_url, video_url, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [customer.id, camera_id || null, alert_type, description || null, confidence || 0, image_url || null, video_url || null, metadata ? JSON.stringify(metadata) : null]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.customer.id, camera_id || null, alert_type, description || null, confidence || 0, image_url || null, video_url || null, metadata ? JSON.stringify(metadata) : null]
     );
 
-    return res.status(201).json(result.rows[0]);
+    const row = await db.get('SELECT * FROM dc_alerts WHERE id = ?', [result.lastID]);
+    return res.status(201).json(row);
   } catch (err) {
     console.error('Create alert error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -103,26 +74,25 @@ export const createAlert = async (req, res, db, customer) => {
 
 /**
  * PUT /api/alerts/:id/acknowledge
- * Marca una alerta como leída
  */
 export const acknowledgeAlert = async (req, res, db) => {
   const { id } = req.params;
   const { acknowledged_by } = req.body;
 
   try {
-    const result = await db.query(
+    const result = await db.run(
       `UPDATE dc_alerts
-       SET acknowledged_at = NOW(), acknowledged_by = $1
-       WHERE id = $2
-       RETURNING *`,
+       SET acknowledged_at = datetime('now'), acknowledged_by = ?
+       WHERE id = ?`,
       [acknowledged_by || req.user.username, id]
     );
 
-    if (result.rows.length === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Alert not found' });
     }
 
-    return res.json(result.rows[0]);
+    const row = await db.get('SELECT * FROM dc_alerts WHERE id = ?', [id]);
+    return res.json(row);
   } catch (err) {
     console.error('Acknowledge alert error:', err);
     return res.status(500).json({ error: 'Server error' });
@@ -130,42 +100,15 @@ export const acknowledgeAlert = async (req, res, db) => {
 };
 
 /**
- * DELETE /api/alerts/:id
- * Elimina una alerta
- */
-export const deleteAlert = async (req, res, db) => {
-  const { id } = req.params;
-
-  try {
-    const result = await db.query(
-      'DELETE FROM dc_alerts WHERE id = $1 RETURNING id',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Alert not found' });
-    }
-
-    return res.json({ message: 'Alert deleted' });
-  } catch (err) {
-    console.error('Delete alert error:', err);
-    return res.status(500).json({ error: 'Server error' });
-  }
-};
-
-/**
  * GET /api/test-alerts
- * Obtiene alertas del test lab
  */
 export const getTestAlerts = async (req, res, db) => {
   try {
-    const result = await db.query(
-      `SELECT * FROM dc_test_alerts
-       ORDER BY created_at DESC
-       LIMIT 100`
+    const rows = await db.all(
+      'SELECT * FROM dc_test_alerts ORDER BY created_at DESC LIMIT 100'
     );
 
-    return res.json(result.rows);
+    return res.json(rows);
   } catch (err) {
     console.error('Get test alerts error:', err);
     return res.status(500).json({ error: 'Server error' });

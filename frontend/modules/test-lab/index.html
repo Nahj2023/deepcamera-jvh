@@ -48,7 +48,7 @@
 </div>
 
 <script type="module">
-  import { apiGet } from '/auth.js';
+  import { apiGet } from './auth.js';
 
   const cameraGrid = document.getElementById('cameraGrid');
   const testAlertsFeed = document.getElementById('testAlertsFeed');
@@ -106,7 +106,8 @@
   async function loadTestAlerts() {
     try {
       // Hacer fetch directo ya que no hay endpoint para test alerts
-      const response = await fetch('/api/test-alerts');
+      const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+      const response = await fetch(base + 'api/test-alerts');
       const alerts = await response.json() || [];
 
       if (alerts.length === 0) {
@@ -152,16 +153,5 @@
     await loadTestAlerts();
   }, 10000);
 
-  // Socket.io para alertas en tiempo real
-  const script = document.createElement('script');
-  script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js';
-  document.head.appendChild(script);
-
-  script.onload = () => {
-    const socket = io();
-    socket.on('test_alert', () => {
-      loadTestCameras();
-      loadTestAlerts();
-    });
-  };
+  // Datos se recargan cada 10s via setInterval
 </script>

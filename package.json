@@ -1,0 +1,35 @@
+{
+  "name": "deepcamera-jvh",
+  "version": "0.1.0",
+  "description": "Vigilancia IA local con dashboard remoto",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "db:init": "node scripts/initdb.js"
+  },
+  "keywords": [
+    "deepcamera",
+    "surveillance",
+    "ai",
+    "edge",
+    "mqtt",
+    "yolo",
+    "face-recognition"
+  ],
+  "author": "JVH Soporte SpA",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.10.3",
+    "mqtt": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "exceljs": "^4.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
