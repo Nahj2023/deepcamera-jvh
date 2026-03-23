@@ -109,14 +109,12 @@ const dbPromise = Database.create(DB_PATH).then(db => {
     CREATE INDEX IF NOT EXISTS idx_cameras_customer ON dc_cameras(customer_id);
   `);
 
-  const existing = db.prepare('SELECT id FROM dc_users WHERE username = ?').get('admin');
-  if (!existing) {
-    const hash = bcrypt.hashSync('JVHadmin2026', 10);
-    db.prepare(
-      "INSERT INTO dc_users (username, email, password_hash, role) VALUES (?, ?, ?, ?)"
-    ).run('admin', 'admin@jvhsoporte.cl', hash, 'superadmin');
-    console.log('[DB] Usuario admin creado');
-  }
+  // Hash fijo para admin — evita regenerar en cada restart
+  var ADMIN_HASH = '$2a$10$wk5h/SPZBkv6cBO6y1a/uepkcrOjWk.uN191bi9HzaoJzD7NBuzJO';
+  db.prepare(
+    "INSERT INTO dc_users (id, username, email, password_hash, role) VALUES (1, 'admin', 'admin@jvhsoporte.cl', ?, 'superadmin') ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash"
+  ).run(ADMIN_HASH);
+  console.log('[DB] Admin OK');
 
   console.log('[DB] SQLite listo:', DB_PATH);
   return db;
