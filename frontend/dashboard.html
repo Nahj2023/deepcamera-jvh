@@ -18,28 +18,33 @@
 
       <nav class="nav-menu">
         <li class="nav-item">
-          <button class="nav-link active" data-module="alerts">
-            Alertas
+          <button class="nav-link active" data-module="detections">
+            🤖 Detecciones
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-module="alerts">
+            🔔 Alertas
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="test-lab">
-            Test Lab
+            🧪 Test Lab
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="customers">
-            Clientes
+            👥 Clientes
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="cameras">
-            Camaras
+            📹 Camaras
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" data-module="reports">
-            Reportes
+            📊 Reportes
           </button>
         </li>
       </nav>
@@ -64,11 +69,15 @@
       <header class="header">
         <div class="header-left">
           <div>
-            <div class="header-title" id="pageTitle">Alertas</div>
-            <div class="header-subtitle" id="pageSubtitle">Feed en tiempo real</div>
+            <div class="header-title" id="pageTitle">Detecciones YOLO</div>
+            <div class="header-subtitle" id="pageSubtitle">Eventos en tiempo real desde el edge</div>
           </div>
 
           <div class="kpi-bar">
+            <div class="kpi">
+              <div class="kpi-value" id="kpiDetections">0</div>
+              <div class="kpi-label">Detecciones hoy</div>
+            </div>
             <div class="kpi">
               <div class="kpi-value" id="kpiAlerts">0</div>
               <div class="kpi-label">Alertas hoy</div>
@@ -77,16 +86,13 @@
               <div class="kpi-value" id="kpiCustomers">0</div>
               <div class="kpi-label">Clientes</div>
             </div>
-            <div class="kpi">
-              <div class="kpi-value" id="kpiCameras">0</div>
-              <div class="kpi-label">Camaras online</div>
-            </div>
           </div>
         </div>
 
         <div class="header-right">
-          <div id="alertNotif" style="display: none;">
-            <span class="alert-badge">Nuevo</span>
+          <div id="edgeStatus" style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+            <span id="edgeDot" style="width:10px;height:10px;border-radius:50%;background:#666;display:inline-block;"></span>
+            <span id="edgeLabel" style="color:#aaa;">Edge: —</span>
           </div>
         </div>
       </header>
@@ -114,11 +120,12 @@
     document.getElementById('logoutBtn').addEventListener('click', logout);
 
     const modules = {
-      alerts: { title: 'Alertas', subtitle: 'Feed en tiempo real', path: 'modules/alerts/list.html' },
-      'test-lab': { title: 'Test Lab', subtitle: 'Tus camaras de prueba', path: 'modules/test-lab/index.html' },
-      customers: { title: 'Clientes', subtitle: 'Empresas vigiladas', path: 'modules/customers/list.html' },
-      cameras: { title: 'Camaras', subtitle: 'Estado de camaras', path: 'modules/cameras/list.html' },
-      reports: { title: 'Reportes', subtitle: 'Exportar datos', path: 'modules/reports/index.html' }
+      detections: { title: 'Detecciones YOLO', subtitle: 'Eventos en tiempo real desde el edge', path: 'modules/detections/index.html' },
+      alerts:     { title: 'Alertas',           subtitle: 'Feed en tiempo real',                  path: 'modules/alerts/list.html' },
+      'test-lab': { title: 'Test Lab',           subtitle: 'Tus camaras de prueba',                path: 'modules/test-lab/index.html' },
+      customers:  { title: 'Clientes',           subtitle: 'Empresas vigiladas',                   path: 'modules/customers/list.html' },
+      cameras:    { title: 'Camaras',            subtitle: 'Estado de camaras',                    path: 'modules/cameras/list.html' },
+      reports:    { title: 'Reportes',           subtitle: 'Exportar datos',                       path: 'modules/reports/index.html' }
     };
 
     async function loadModule(moduleName) {
@@ -128,8 +135,7 @@
       document.getElementById('pageTitle').textContent = module.title;
       document.getElementById('pageSubtitle').textContent = module.subtitle;
 
-      const navLinks = document.querySelectorAll('.nav-link');
-      navLinks.forEach(link => {
+      document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.toggle('active', link.dataset.module === moduleName);
       });
 
@@ -151,25 +157,36 @@
     }
 
     document.querySelectorAll('.nav-link').forEach(link => {
-      link.addEventListener('click', () => {
-        loadModule(link.dataset.module);
-      });
+      link.addEventListener('click', () => loadModule(link.dataset.module));
     });
 
-    loadModule('alerts');
+    loadModule('detections');
 
+    // KPIs — actualizar cada 15s
     async function updateKPIs() {
       try {
-        const alerts = await apiGet('api/alerts');
-        const customers = await apiGet('api/customers');
-        if (alerts && customers) {
-          const alertsToday = alerts.filter(a => {
-            const created = new Date(a.created_at);
-            return created.toDateString() === new Date().toDateString();
-          }).length;
+        const [alerts, customers, events] = await Promise.allSettled([
+          apiGet('api/alerts'),
+          apiGet('api/customers'),
+          apiGet('api/events?limit=200')
+        ]);
 
+        if (alerts.status === 'fulfilled' && alerts.value) {
+          const alertsToday = alerts.value.filter(a =>
+            new Date(a.created_at).toDateString() === new Date().toDateString()
+          ).length;
           document.getElementById('kpiAlerts').textContent = alertsToday;
-          document.getElementById('kpiCustomers').textContent = customers.length;
+        }
+
+        if (customers.status === 'fulfilled' && customers.value) {
+          document.getElementById('kpiCustomers').textContent = customers.value.length;
+        }
+
+        if (events.status === 'fulfilled' && events.value) {
+          const detectionsToday = events.value
+            .filter(e => new Date(e.created_at).toDateString() === new Date().toDateString())
+            .reduce((sum, e) => sum + (e.total || 0), 0);
+          document.getElementById('kpiDetections').textContent = detectionsToday;
         }
       } catch (err) {
         console.error('KPI update error:', err);
@@ -177,10 +194,36 @@
     }
 
     updateKPIs();
-    setInterval(updateKPIs, 10000);
+    setInterval(updateKPIs, 15000);
 
-    // Real-time via polling (Passenger no soporta WebSockets)
-    // KPIs se actualizan cada 10s via setInterval arriba
+    // Indicador estado edge (sin JWT)
+    async function updateEdgeStatus() {
+      try {
+        const res = await fetch('api/edge-status');
+        if (!res.ok) return;
+        const data = await res.json();
+        const dot   = document.getElementById('edgeDot');
+        const label = document.getElementById('edgeLabel');
+        if (data.status === 'online') {
+          dot.style.background = '#00C49A';
+          label.style.color = '#00C49A';
+          label.textContent = `Edge: online (${(data.cameras || []).join(', ') || '—'})`;
+        } else if (data.status === 'offline') {
+          dot.style.background = '#EE5D50';
+          label.style.color = '#EE5D50';
+          label.textContent = 'Edge: offline';
+        } else {
+          dot.style.background = '#666';
+          label.style.color = '#aaa';
+          label.textContent = 'Edge: sin datos';
+        }
+      } catch {
+        // silencioso
+      }
+    }
+
+    updateEdgeStatus();
+    setInterval(updateEdgeStatus, 30000);
   </script>
 </body>
 </html>
