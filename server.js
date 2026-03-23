@@ -137,10 +137,40 @@ dbPromise.then(db => {
     alertHandler.createAlert(req, res, db, customer);
   });
 
+  // Edge key middleware
+  var EDGE_API_KEY = process.env.EDGE_API_KEY || 'DC-EDGE-2026-JVH';
+  function verifyEdgeKey(req, res, next) {
+    if (req.headers['x-edge-key'] !== EDGE_API_KEY) {
+      return res.status(401).json({ error: 'Invalid edge key' });
+    }
+    next();
+  }
+
   // Routes — Events
   app.get('/api/events', verifyJWT, (req, res) => detectionHandler.getEvents(req, res, db));
   app.get('/api/events/latest', verifyJWT, (req, res) => detectionHandler.getLatestEvents(req, res, db));
   app.get('/api/events/:id', verifyJWT, (req, res) => detectionHandler.getEventById(req, res, db));
+
+  // Edge ingest (desde Ryzen via HTTP)
+  app.post('/api/events/ingest', verifyEdgeKey, (req, res) => {
+    try {
+      detectionHandler.saveEvent(db, req.body);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('[INGEST]', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/edge/alive', verifyEdgeKey, (req, res) => {
+    try {
+      detectionHandler.upsertEdgeStatus(db, req.body);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('[ALIVE]', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Edge status
   app.get('/api/edge-status', (req, res) => detectionHandler.getEdgeStatus(req, res, db));
