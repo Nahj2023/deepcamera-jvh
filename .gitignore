@@ -60,3 +60,4 @@ secrets.json
 .aws/
 credentials.json
 INSTALL.md
+INSTALL.pdf
