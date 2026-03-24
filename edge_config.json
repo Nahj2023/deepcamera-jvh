@@ -1,0 +1,54 @@
+{
+  "camera": {
+    "url": "rtsp://rtsp:z8PzKtTY@192.168.0.135:554/av_stream/ch0",
+    "name": "Camara-Sonoff-Principal",
+    "reconnect_delay": 5
+  },
+
+  "backend": {
+    "url": "https://jvhsoporte.cl/deepcamera",
+    "api_key": "PONER_API_KEY_AQUI",
+    "alive_interval": 60
+  },
+
+  "telegram": {
+    "enabled": true,
+    "bot_token": "PONER_BOT_TOKEN_AQUI",
+    "chat_id": "PONER_CHAT_ID_AQUI",
+    "send_photo": true,
+    "send_video_clip": false
+  },
+
+  "detection": {
+    "model": "yolov8n.pt",
+    "confidence_threshold": 0.55,
+    "person_class_id": 0,
+    "ignore_classes": [15, 16],
+    "cooldown_seconds": 30,
+    "save_thumbnails": true,
+    "thumbnails_dir": "thumbnails"
+  },
+
+  "face_recognition": {
+    "enabled": true,
+    "known_faces_dir": "known_faces",
+    "tolerance": 0.5,
+    "unknown_label": "Desconocido"
+  },
+
+  "schedule": {
+    "enabled": false,
+    "alert_hours": [
+      {"from": "22:00", "to": "06:00"},
+      {"from": "08:00", "to": "09:00"}
+    ],
+    "always_alert_unknown": true
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_file": "edge_detector.log",
+    "max_bytes": 5242880,
+    "backup_count": 3
+  }
+}

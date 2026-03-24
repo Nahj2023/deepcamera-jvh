@@ -61,3 +61,15 @@ secrets.json
 credentials.json
 INSTALL.md
 INSTALL.pdf
+
+# DeepCamera Edge — archivos locales
+thumbnails/
+test_capture.jpg
+yolov8n.pt
+*.pt
+
+# Known faces (fotos privadas — no subir al repo)
+known_faces/
+
+# Deploy zips viejos
+deploy-s8*.zip
